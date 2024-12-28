@@ -1,14 +1,24 @@
 import AWS from "aws-sdk";
+import { Upload } from "@aws-sdk/lib-storage";
+import { S3 } from "@aws-sdk/client-s3";
 import { Readable } from "stream";
 import axios from "axios";
 import fs from "fs";
 
+// JS SDK v3 does not support global configuration.
+// Codemod has attempted to pass values to each service client in this file.
+// You may need to update clients outside of this file, if they use global config.
 AWS.config.update({
   accessKeyId: process.env.AWS_AK,
   secretAccessKey: process.env.AWS_SK,
 });
 
-const s3 = new AWS.S3();
+const s3 = new S3({
+  credentials: {
+    accessKeyId: process.env.AWS_AK ?? '',
+    secretAccessKey: process.env.AWS_SK ?? '',
+  },
+});
 
 export async function downloadAndUploadImage(
   imageUrl: string,
@@ -28,7 +38,10 @@ export async function downloadAndUploadImage(
       Body: response.data as Readable,
     };
 
-    return s3.upload(uploadParams).promise();
+    return new Upload({
+      client: s3,
+      params: uploadParams,
+    }).done();
   } catch (e) {
     console.log("upload failed:", e);
     throw e;
