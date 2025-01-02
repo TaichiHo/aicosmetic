@@ -2,7 +2,7 @@ import { getUserOrders, updateOrderStatus } from "@/models/order";
 
 import { Order } from "@/types/order";
 import Stripe from "stripe";
-import { UserCredits } from "@/types/user";
+import { UserWithCredits } from "@/types/user";
 import { getUserCoversCount } from "@/models/cover";
 
 export async function handleOrderSession(session_id: string) {
@@ -16,7 +16,7 @@ export async function handleOrderSession(session_id: string) {
     }
 
     const order_no = session.metadata.order_no;
-    const paied_at = new Date().toISOString();
+    const paied_at = new Date();
     updateOrderStatus(order_no, 2, paied_at);
     console.log("update success order status: ", order_no, paied_at);
   } catch (e) {
@@ -25,13 +25,15 @@ export async function handleOrderSession(session_id: string) {
   }
 }
 
-export async function getUserCredits(user_email: string): Promise<UserCredits> {
-  let user_credits: UserCredits = {
-    one_time_credits: 1,
-    monthly_credits: 0,
-    total_credits: 1,
-    used_credits: 0,
-    left_credits: 1,
+export async function getUserCredits(user_email: string): Promise<UserWithCredits> {
+  let user_credits: UserWithCredits = {
+    credits: {
+      one_time_credits: 1,
+      monthly_credits: 0,
+      total_credits: 1,
+      used_credits: 0,
+      left_credits: 1,
+    },
   };
 
   try {

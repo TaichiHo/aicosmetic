@@ -1,13 +1,14 @@
 export interface Order {
+  id: number;
   order_no: string;
-  created_at: string;
-  user_email: string;
+  clerk_id: string;
   amount: number;
   plan: string;
-  expired_at: string;
-  order_status: number;
-  paied_at?: string;
-  stripe_session_id?: string;
   credits: number;
   currency: string;
+  order_status: number; // 0: pending, 1: paid, 2: cancelled
+  created_at: Date;
+  expired_at?: Date;
+  paid_at?: Date;
+  stripe_session_id?: string;
 }

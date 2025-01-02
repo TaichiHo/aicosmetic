@@ -6,35 +6,32 @@ export default function () {
       <div className="w-screen flex-col px-6 py-20 lg:flex lg:px-10 xl:px-24">
         <div className="lg:flex lg:flex-row lg:justify-between">
           <div>
-            <p>AI Cover</p>
+            <p>BeautyTracker</p>
             <p className="font-inter mt-4 max-w-[350px] text-base font-light text-gray-500">
-              AI 红包封面生成器
+              Your AI-powered cosmetics collection organizer
             </p>
             <div className="mb-8 mt-6">{/* <Social /> */}</div>
           </div>
           <div className="flex grow flex-row flex-wrap lg:mx-10 lg:flex-nowrap lg:justify-center">
             <div className="my-5 mr-8 flex max-w-[200px] grow basis-[100px] flex-col space-y-5 lg:mx-10 lg:mt-0">
-              <p className="font-inter font-medium text-black">其他作品</p>
+              <p className="font-inter font-medium text-black">Features</p>
               <a
-                href="https://gpts.works"
-                target="_blank"
+                href="/collection"
                 className="font-inter font-light text-gray-500"
               >
-                GPTs Works
+                My Collection
               </a>
               <a
-                href="https://gptalk.one"
-                target="_blank"
+                href="/discover"
                 className="font-inter font-light text-gray-500"
               >
-                GPTalk
+                Discover
               </a>
               <a
-                href="https://readknown.cn"
-                target="_blank"
+                href="/scan"
                 className="font-inter font-light text-gray-500"
               >
-                知了 zKnown
+                Scan Product
               </a>
             </div>
             <div className="my-5 mr-8 flex max-w-[200px] grow basis-[100px] flex-col space-y-5 lg:mx-10 lg:mt-0">
@@ -60,11 +57,11 @@ export default function () {
           <p className="font-inter text-center text-sm text-gray-500 lg:mt-0">
             © Copyright 2024.{" "}
             <a
-              href="https://aicover.design"
+              href="/"
               target="_blank"
               className="text-primary hidden md:inline-block"
             >
-              aicover.design
+              beautytracker.app
             </a>{" "}
             All rights reserved.
           </p>

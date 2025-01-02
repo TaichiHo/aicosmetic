@@ -9,13 +9,8 @@ export default function () {
   const { user } = useContext(AppContext);
 
   const navigations: Nav[] = [
-    { name: "pricing", title: "价格", url: "/pricing", target: "_self" },
-    {
-      name: "doc",
-      title: "定制微信红包封面",
-      url: "https://cover.weixin.qq.com/cgi-bin/mmcover-bin/readtemplate?t=page/index#/doc?page=design&index=-1",
-      target: "_blank",
-    },
+    { name: "collection", title: "My Collection", url: "/collection", target: "_self" },
+    { name: "discover", title: "Discover", url: "/discover", target: "_self" },
   ];
 
   return (
@@ -30,7 +25,7 @@ export default function () {
                 alt="logo"
               />
               <span className="font-bold text-primary text-2xl">
-                AI 红包封面
+                BeautyTracker
               </span>
             </a>
 
@@ -60,10 +55,10 @@ export default function () {
                     <>
                       {user.credits && (
                         <a
-                          href="/pricing"
+                          href="/collection"
                           className="hidden md:block mr-8 font-normal text-gray-800 cursor-pointer"
                         >
-                          额度:{" "}
+                          Products:{" "}
                           <span className="text-primary">
                             {user.credits.left_credits}
                           </span>
@@ -74,7 +69,7 @@ export default function () {
                     </>
                   ) : (
                     <a className="cursor-pointer" href="/sign-in">
-                      <Button>登录</Button>
+                      <Button>login</Button>
                     </a>
                   )}
                 </>

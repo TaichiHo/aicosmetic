@@ -1,64 +1,51 @@
-import { User } from "@/types/user";
-import { getDb } from "@/models/db";
+import { getDb } from "./db";
+import { User, UserWithCredits } from "@/types/user";
 
-export async function insertUser(user: User) {
-  const createdAt: string = new Date().toISOString();
+export async function getUserByEmail(email: string): Promise<User | null> {
+  const db = getDb();
+  const result = await db.query(
+    "SELECT * FROM users WHERE email = $1 LIMIT 1",
+    [email]
+  );
+  return result.rows[0] || null;
+}
 
-  const db = await getDb();
-  const res = await db.query(
-    `INSERT INTO users 
-      (email, nickname, avatar_url, created_at, uuid) 
-      VALUES 
-      ($1, $2, $3, $4, $5)
-  `,
-    [user.email, user.nickname, user.avatar_url, createdAt, user.uuid]
+export async function createUser(
+  email: string,
+  clerk_id: string,
+  nickname?: string,
+  avatar_url?: string
+): Promise<User> {
+  const db = getDb();
+  const result = await db.query(
+    `INSERT INTO users (email, clerk_id, nickname, avatar_url, created_at, uuid) 
+     VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, gen_random_uuid()) 
+     RETURNING *`,
+    [email, clerk_id, nickname, avatar_url]
+  );
+  return result.rows[0];
+}
+
+export async function getUserWithCredits(email: string): Promise<UserWithCredits | null> {
+  const db = getDb();
+  const result = await db.query(
+    `SELECT u.*, 
+            COALESCE(SUM(o.credits), 0) as left_credits
+     FROM users u
+     LEFT JOIN orders o ON u.id = o.user_id AND o.order_status = 1
+     WHERE u.email = $1
+     GROUP BY u.id
+     LIMIT 1`,
+    [email]
   );
 
-  return res;
-}
+  if (!result.rows[0]) return null;
 
-export async function findUserByEmail(
-  email: string
-): Promise<User | undefined> {
-  const db = getDb();
-  const res = await db.query(`SELECT * FROM users WHERE email = $1 LIMIT 1`, [
-    email,
-  ]);
-  if (res.rowCount === 0) {
-    return undefined;
-  }
-
-  const { rows } = res;
-  const row = rows[0];
-  const user: User = {
-    email: row.email,
-    nickname: row.nickname,
-    avatar_url: row.avatar_url,
-    created_at: row.created_at,
-    uuid: row.uuid,
+  const user = result.rows[0];
+  return {
+    ...user,
+    credits: {
+      left_credits: parseInt(user.left_credits) || 0,
+    },
   };
-
-  return user;
-}
-
-export async function findUserByUuid(uuid: string): Promise<User | undefined> {
-  const db = getDb();
-  const res = await db.query(`SELECT * FROM users WHERE uuid = $1 LIMIT 1`, [
-    uuid,
-  ]);
-  if (res.rowCount === 0) {
-    return undefined;
-  }
-
-  const { rows } = res;
-  const row = rows[0];
-  const user: User = {
-    email: row.email,
-    nickname: row.nickname,
-    avatar_url: row.avatar_url,
-    created_at: row.created_at,
-    uuid: row.uuid,
-  };
-
-  return user;
 }

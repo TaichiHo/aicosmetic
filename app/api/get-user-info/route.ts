@@ -1,10 +1,9 @@
-import { findUserByEmail, insertUser } from "@/models/user";
+import { getUserByEmail, createUser } from "@/models/user";
 import { respData, respErr } from "@/lib/resp";
 
 import { User } from "@/types/user";
 import { currentUser } from "@clerk/nextjs";
 import { genUuid } from "@/lib";
-import { getUserCredits } from "@/services/order";
 
 export async function POST(req: Request) {
   const user = await currentUser();
@@ -19,20 +18,21 @@ export async function POST(req: Request) {
 
     let userInfo: User = {
       email: email,
+      clerk_id: user.id,  
       nickname: nickname || "",
       avatar_url: avatarUrl,
+      created_at: new Date(),
       uuid: genUuid(),
+      id: user.id
     };
 
-    const existUser = await findUserByEmail(email);
+    const existUser = await getUserByEmail(email);
     if (existUser) {
       userInfo.uuid = existUser.uuid;
+      userInfo.id = existUser.id;
     } else {
-      await insertUser(userInfo);
+      await createUser(userInfo.email, userInfo.clerk_id, userInfo.nickname, userInfo.avatar_url);
     }
-
-    const user_credits = await getUserCredits(email);
-    userInfo.credits = user_credits;
 
     return respData(userInfo);
   } catch (e) {

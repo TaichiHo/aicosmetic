@@ -15,14 +15,18 @@ export const AppContextProvider = ({ children }: ContextProviderProps) => {
     try {
       const uri = "/api/get-user-info";
       const params = {};
+      console.log("resp uri", uri);
 
       const resp = await fetch(uri, {
         method: "POST",
         body: JSON.stringify(params),
       });
 
+      console.log("resp", resp);
+
       if (resp.ok) {
         const res = await resp.json();
+        console.log("res json", res);
         if (res.data) {
           setUser(res.data);
           return;

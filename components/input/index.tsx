@@ -1,115 +1,229 @@
 "use client";
 
-import { KeyboardEvent, useContext, useRef, useState } from "react";
-
+import { useContext, useRef, useState } from "react";
+import Image from "next/image";
 import { AppContext } from "@/contexts/AppContext";
-import { Cover } from "@/types/cover";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { Upload, Camera } from "lucide-react";
 
 export default function () {
   const router = useRouter();
-  const { setCovers, user, fetchUserInfo } = useContext(AppContext);
-  const [description, setDiscription] = useState("");
+  const { user } = useContext(AppContext);
   const [loading, setLoading] = useState(false);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleInputKeydown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.code === "Enter" && !e.shiftKey) {
-      if (e.keyCode !== 229) {
-        e.preventDefault();
-        handleSubmit();
+  const handleFile = (file: File) => {
+    // Check if file is an image
+    if (!file.type.startsWith('image/')) {
+      toast.error("Please upload an image file");
+      return;
+    }
+
+    // Check file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size should be less than 5MB");
+      return;
+    }
+
+    setImageFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    handleFile(file);
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    handleFile(file);
+  };
+
+  const handleCameraCapture = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) handleFile(file);
+        break;
       }
     }
   };
 
   const handleSubmit = async () => {
-    console.log("description", description);
-    if (!description) {
-      toast.error("请输入红包封面描述");
-      inputRef.current?.focus();
+    if (!imageFile) {
+      toast.error("Please upload an image first");
       return;
     }
 
     if (!user) {
-      toast.error("请先登录");
+      toast.error("Please sign in first");
       router.push("/sign-in");
       return;
     }
 
-    if (user.credits && user.credits.left_credits < 1) {
-      toast.error("余额不足，请先充值");
-      router.push("/pricing");
-      return;
-    }
-
     try {
-      const params = {
-        description: description,
-      };
-
       setLoading(true);
-      const resp = await fetch("/api/gen-cover", {
+
+      // First, upload the image to S3 or your storage service
+      const uploadFormData = new FormData();
+      uploadFormData.append('image', imageFile);
+
+      const uploadResp = await fetch("/api/upload-image", {
+        method: "POST",
+        body: uploadFormData,
+      });
+
+      const uploadData = await uploadResp.json();
+
+      if (!uploadData.success) {
+        throw new Error(uploadData.message || "Failed to upload image");
+      }
+
+      // Then, send the image URL to Gemini for analysis
+      const identifyResp = await fetch("/api/identify-product", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(params),
+        body: JSON.stringify({
+          imageUrl: uploadData.imageUrl,
+          userId: user.id,
+        }),
       });
-      const { code, message, data } = await resp.json();
+
+      const { success, message, data } = await identifyResp.json();
+
+      if (!success) {
+        throw new Error(message || "Failed to identify product");
+      }
+
+      // Clear the image after successful processing
+      setImageFile(null);
+      setImagePreview(null);
+      toast.success("Product identified successfully");
+
+      // Redirect to product details or add to collection page
+      if (data?.productId) {
+        router.push(`/products/${data.productId}`);
+      }
+    } catch (error: any) {
+      console.error("Failed to process image:", error);
+      toast.error(error.message || "Failed to process image");
+    } finally {
       setLoading(false);
-
-      if (resp.status === 401) {
-        toast.error("请先登录");
-        router.push("/sign-in");
-        return;
-      }
-      console.log("gen wallpaper resp", resp);
-
-      if (code !== 0) {
-        toast.error(message);
-        return;
-      }
-
-      fetchUserInfo();
-      setDiscription("");
-
-      toast.success("生成成功");
-      if (data) {
-        console.log("new cover", data);
-        setCovers((covers: Cover[]) => [data, ...covers]);
-      }
-    } catch (e) {
-      console.log("gen cover failed", e);
     }
   };
 
   return (
-    <div className="relative max-w-2xl mx-auto mt-4 md:mt-16">
-      <input
-        type="text"
-        className="mb-1 h-9 w-full rounded-md border border-solid border-primary px-3 py-6 text-sm text-[#333333] focus:border-primary"
-        placeholder="输入要生成的红包封面描述"
-        ref={inputRef}
-        value={description}
-        onChange={(e) => setDiscription(e.target.value)}
-        onKeyDown={handleInputKeydown}
-      />
-      {loading ? (
-        <button
-          className="relative right-0 top-[5px] w-full cursor-pointer rounded-md bg-primary px-6 py-2 text-center font-semibold text-white sm:absolute sm:right-[5px] sm:w-auto"
-          disabled
+    <div className="max-w-2xl mx-auto mt-4 md:mt-16 px-4">
+      <div className="flex flex-col items-center space-y-4">
+        {/* Hidden file input */}
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          ref={fileInputRef}
+          onChange={handleImageUpload}
+        />
+
+        {/* Image preview or upload area */}
+        <div
+          className={`w-full aspect-square max-w-md border-2 border-dashed rounded-lg flex flex-col items-center justify-center p-4 relative transition-colors
+            ${dragActive ? 'border-primary bg-primary/10' : 'border-primary/50'}
+            ${imagePreview ? '' : 'cursor-pointer hover:border-primary hover:bg-primary/5'}`}
+          onClick={() => !imagePreview && fileInputRef.current?.click()}
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+          onPaste={handlePaste}
+          role="button"
+          tabIndex={0}
         >
-          生成中...
-        </button>
-      ) : (
-        <button
-          className="relative right-0 top-[5px] w-full cursor-pointer rounded-md bg-primary border-primary px-6 py-2 text-center font-semibold text-white sm:absolute sm:right-[5px] sm:w-auto"
-          onClick={handleSubmit}
-        >
-          生成封面
-        </button>
-      )}
+          {imagePreview ? (
+            <div className="relative w-full h-full">
+              <Image
+                src={imagePreview}
+                alt="Preview"
+                fill
+                className="object-contain rounded-lg"
+              />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageFile(null);
+                  setImagePreview(null);
+                }}
+                className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <div className="text-center">
+              <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+              <p className="text-sm text-gray-500">
+                Drop your cosmetic product image here, or click to upload
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                You can also paste an image or use your camera
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Supports JPG, PNG (max 5MB)
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex space-x-4 w-full max-w-md">
+          <button
+            className="flex-1 flex items-center justify-center space-x-2 py-3 bg-secondary text-white rounded-lg hover:bg-secondary/90 transition-colors"
+            onClick={handleCameraCapture}
+          >
+            <Camera className="w-5 h-5" />
+            <span>Take Photo</span>
+          </button>
+          <button
+            className="flex-1 py-3 bg-primary text-white rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-colors"
+            onClick={handleSubmit}
+            disabled={!imageFile || loading}
+          >
+            {loading ? "Processing..." : "Identify Product"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
