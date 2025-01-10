@@ -13,6 +13,11 @@ export interface Product {
   currency?: string;
   created_at: Date;
   uuid: string;
+  official_urls?: {
+    sephora?: string;
+    ulta?: string;
+    official?: string;
+  };
 }
 
 export interface ProductWithCategory extends Product {

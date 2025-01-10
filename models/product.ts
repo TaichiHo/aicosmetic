@@ -85,4 +85,41 @@ export async function getProductsByCategory(categoryId: number): Promise<Product
     [categoryId]
   );
   return result.rows;
+}
+
+export async function getProductByBrandAndName(brand: string, name: string): Promise<ProductWithCategory | null> {
+  const db = getDb();
+  
+  // First try exact match (case-insensitive)
+  const exactResult = await db.query(
+    `SELECT p.*, pc.name as category_name
+     FROM products p
+     JOIN product_categories pc ON p.category_id = pc.id
+     WHERE LOWER(p.brand) = LOWER($1) AND LOWER(p.name) = LOWER($2)
+     LIMIT 1`,
+    [brand, name]
+  );
+
+  if (exactResult.rows[0]) {
+    return exactResult.rows[0];
+  }
+
+  // If no exact match, try fuzzy match with similarity threshold
+  const fuzzyResult = await db.query(
+    `SELECT p.*, pc.name as category_name,
+            GREATEST(
+              SIMILARITY(LOWER(p.brand), LOWER($1)),
+              SIMILARITY(LOWER(p.name), LOWER($2))
+            ) as match_score
+     FROM products p
+     JOIN product_categories pc ON p.category_id = pc.id
+     WHERE 
+       (SIMILARITY(LOWER(p.brand), LOWER($1)) > 0.3 AND
+        SIMILARITY(LOWER(p.name), LOWER($2)) > 0.3)
+     ORDER BY match_score DESC
+     LIMIT 1`,
+    [brand, name]
+  );
+
+  return fuzzyResult.rows[0] || null;
 } 

@@ -94,7 +94,14 @@ export default function UserProducts() {
                 onClick={() => router.push(`/products/${userProduct.product.id}`)}
               >
                 <div className="aspect-square relative">
-                  {userProduct.product.image_url ? (
+                {userProduct.user_image_url ? (
+                    <Image
+                      src={userProduct.user_image_url}
+                      alt={userProduct.product.name}
+                      fill
+                      className="object-cover"
+                    />
+                  ) : userProduct.product.image_url ? (
                     <Image
                       src={userProduct.product.image_url}
                       alt={userProduct.product.name}

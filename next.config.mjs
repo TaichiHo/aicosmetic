@@ -4,6 +4,7 @@ const nextConfig = {
     domains: [
       "oaidalleapiprodscus.blob.core.windows.net",
       "aicoverwingtaichi.s3.us-west-1.amazonaws.com",
+      "www.sephora.com",
     ],
   },
 };

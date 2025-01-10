@@ -1,10 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { ProductWithCategory } from '@/types/product';
 import { UserProductWithDetails } from '@/types/userProduct';
 import { formatDate } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface ProductDetailProps {
   product: ProductWithCategory;
@@ -12,12 +13,63 @@ interface ProductDetailProps {
 }
 
 export default function ProductDetail({ product, userProducts }: ProductDetailProps) {
+  const [usagePercentage, setUsagePercentage] = useState<number>(0);
+  const [usageHistory, setUsageHistory] = useState<{ usage_date: Date, usage_percentage: number }[]>([]);
+
+  useEffect(() => {
+    const fetchUsageHistory = async (userProductId: number) => {
+      try {
+        const response = await fetch(`/api/get-usage-history?userProductId=${userProductId}`);
+        const data = await response.json();
+        if (data.success) {
+          setUsageHistory(data.usageHistory);
+        }
+      } catch (error) {
+        console.error('Failed to fetch usage history:', error);
+      }
+    };
+
+    if (userProducts.length > 0) {
+      fetchUsageHistory(userProducts[0].id);
+    }
+  }, [userProducts]);
+
+  const handleUsageSubmit = async (userProductId: number) => {
+    try {
+      console.log('Submitting usage for user product ID:', userProductId);
+      const response = await fetch('/api/record-usage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userProductId, usagePercentage }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to record usage');
+      }
+
+      toast.success('Usage recorded successfully');
+      setUsageHistory([{ usage_date: new Date(), usage_percentage: usagePercentage }, ...usageHistory]);
+    } catch (error) {
+      console.error('Usage recording failed:', error);
+      toast.error('Failed to record usage');
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Product Image */}
         <div className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
-          {product.image_url ? (
+          {userProducts.length > 0 && userProducts[0].user_image_url ? (
+            <Image
+              src={userProducts[0].user_image_url}
+              alt={product.name}
+              fill
+              className="object-cover"
+            />
+          ) : product.image_url ? (
             <Image
               src={product.image_url}
               alt={product.name}
@@ -27,6 +79,20 @@ export default function ProductDetail({ product, userProducts }: ProductDetailPr
           ) : (
             <div className="flex items-center justify-center h-full">
               <span className="text-gray-400">No image available</span>
+            </div>
+          )}
+          {/* Show official product image as thumbnail if both images exist */}
+          {userProducts.length > 0 && userProducts[0].user_image_url && product.image_url && (
+            <div className="absolute bottom-2 right-2">
+              <div className="bg-white rounded-full p-1 shadow-md">
+                <Image
+                  src={product.image_url}
+                  alt="Official product image"
+                  width={40}
+                  height={40}
+                  className="rounded-full"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -138,6 +204,40 @@ export default function ProductDetail({ product, userProducts }: ProductDetailPr
                         Notes: {userProduct.notes}
                       </p>
                     )}
+
+                    {/* Usage Recording Form */}
+                    <div className="mt-4">
+                      <h3 className="text-lg font-semibold">Record Usage</h3>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={usagePercentage}
+                          onChange={(e) => setUsagePercentage(Number(e.target.value))}
+                          className="border rounded-lg px-3 py-2 w-20"
+                        />
+                        <span>%</span>
+                        <button
+                          onClick={() => handleUsageSubmit(userProduct.id)}
+                          className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90"
+                        >
+                          Submit
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Usage History */}
+                    <div className="mt-4">
+                      <h3 className="text-lg font-semibold">Usage History</h3>
+                      <ul className="list-disc pl-5">
+                        {usageHistory.map((entry, index) => (
+                          <li key={index} className="text-sm text-gray-600">
+                            {formatDate(entry.usage_date)}: {entry.usage_percentage}%
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 ))}
               </div>

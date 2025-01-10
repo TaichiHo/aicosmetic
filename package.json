@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:crawler": "ts-node tests/crawler.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.717.0",
@@ -27,6 +28,7 @@
     "next": "14.1.0",
     "openai": "^4.26.0",
     "pg": "^8.11.3",
+    "puppeteer": "^23.11.1",
     "react": "^18.2.0",
     "react-dom": "^18",
     "react-icons": "^5.0.1",
@@ -46,6 +48,7 @@
     "autoprefixer": "^10.0.1",
     "postcss": "^8",
     "tailwindcss": "^3.3.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }

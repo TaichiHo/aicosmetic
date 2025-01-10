@@ -1,30 +1,39 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { createProduct, getProductByBarcode } from "@/models/product";
-import { createUserProduct } from "@/models/userProduct";
-
+import { createProduct, getProductByBarcode, getProductByBrandAndName } from "@/models/product";
+import { createUserProduct, getUserProductByClerkIdAndProductId } from "@/models/userProduct";
 const promptTemplate = `
-Analyze this cosmetic product image and identify all visible cosmetic products. For each product, extract the following information in a JSON array format:
+Analyze this cosmetic product image and identify only the clearly visible and identifiable cosmetic products. For each product that can be confidently identified, extract the following information in a JSON array format:
 [
   {
-    "name": "Full product name",
+    "name": "Product name without brand",
     "brand": "Brand name",
     "category": "Category (one of: Skincare, Makeup, Haircare, Fragrance, Body Care, Tools)",
     "description": "Brief product description",
     "size_value": "Numerical size value (if visible)",
     "size_unit": "Unit of measurement (ml, g, oz, etc.)",
     "standard_size": "Size category (Full Size, Travel Size, Mini)",
+    "retail_price": "Retail price if visible (numerical value only)",
+    "currency": "Currency of retail price (USD, EUR, etc.) if price is visible",
     "barcode": "Barcode number if visible (or null)",
     "confidence": "Your confidence level in the identification (high, medium, low)",
-    "location": "Brief description of where this product appears in the image (e.g., 'left side', 'center', 'top right')"
+    "location": "Brief description of where this product appears in the image (e.g., 'left side', 'center', 'top right')",
+    "official_urls": {
+      "sephora": "Full Sephora product URL if you can identify the exact product (or null)",
+      "ulta": "Full Ulta product URL if you can identify the exact product (or null)", 
+      "official": "Brand's official website product URL if you can identify it (or null)"
+    }
   }
 ]
 
-Be as accurate as possible with the information you can see in the image.
-If you can't determine certain fields for a product, use null for those values.
-If you can only partially identify a product, still include it with available information.
-List products from most visible/clear to least visible in the image.
+Important:
+- Only include products where you can identify at least the brand and product name with high or medium confidence
+- Skip any products that are too blurry, partially hidden, or cannot be identified with reasonable certainty
+- For included products, be as accurate as possible with the information you can see
+- If certain fields cannot be determined for an included product, use null for those values
+- List products from most visible/clear to least visible in the image
+- For the official_urls, only include URLs if you are highly confident they match the exact product variant shown
 `;
 
 export async function POST(request: Request) {
@@ -51,8 +60,6 @@ export async function POST(request: Request) {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const imageResponse = await fetch(imageUrl);
-    console.log("imageUrl", imageUrl);
-
     const imageData = await imageResponse.arrayBuffer();
     const mimeType = imageResponse.headers.get("content-type") || "image/jpeg";
 
@@ -69,21 +76,25 @@ export async function POST(request: Request) {
     const response = await result.response;
     const responseText = response.text();
     
-    // Extract JSON array content using regex
     const jsonMatch = (await responseText).match(/\[[\s\S]*\]/);
     const jsonString = jsonMatch ? jsonMatch[0] : '[]';
     const productsInfo = JSON.parse(jsonString);
 
-    // Process each identified product
     const createdProducts = [];
     for (const productInfo of productsInfo) {
-      // If barcode is available, check if product already exists
       let product = null;
+
+      // First try to find by barcode if available
       if (productInfo.barcode) {
         product = await getProductByBarcode(productInfo.barcode);
       }
 
-      // If product doesn't exist, create it
+      // If not found by barcode, try to find by brand and name
+      if (!product && productInfo.brand && productInfo.name) {
+        product = await getProductByBrandAndName(productInfo.brand, productInfo.name);
+      }
+
+      // If product still not found, create new one
       if (!product) {
         const categoryMap: { [key: string]: number } = {
           Skincare: 1,
@@ -99,26 +110,33 @@ export async function POST(request: Request) {
           brand: productInfo.brand,
           category_id: categoryMap[productInfo.category] || 1,
           description: productInfo.description,
-          image_url: imageUrl,
           barcode: productInfo.barcode,
           size_value: productInfo.size_value ? parseFloat(productInfo.size_value) : undefined,
           size_unit: productInfo.size_unit,
-          standard_size: productInfo.standard_size,
+          standard_size: productInfo.standard_size
         });
       }
 
-      // Create user product entry
-      const userProduct = await createUserProduct({
-        clerk_id: userId,
-        product_id: product.id,
-        usage_status: "new",
-        usage_percentage: 0,
-      });
+      // Check if user already has this product
+      let userProduct = await getUserProductByClerkIdAndProductId(userId, product.id);
+
+      // If user doesn't have this product, create a new user product entry
+      if (!userProduct) {
+        userProduct = await createUserProduct({
+          clerk_id: userId,
+          product_id: product.id,
+          usage_status: "new",
+          usage_percentage: 0,
+          user_image_url: imageUrl
+        });
+      }
 
       createdProducts.push({
         productId: product.id,
         userProductId: userProduct.id,
         ...productInfo,
+        user_image_url: imageUrl,
+        alreadyExists: !!userProduct
       });
     }
 

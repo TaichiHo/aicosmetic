@@ -15,6 +15,7 @@ export interface UserProduct {
   notes?: string;
   created_at: Date;
   uuid: string;
+  user_image_url?: string;
 }
 
 export interface UserProductWithDetails extends UserProduct {

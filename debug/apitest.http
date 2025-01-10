@@ -15,3 +15,20 @@ Content-Type: application/json
 {
     
 }
+
+### delete user product
+DELETE {{baseUri}}/delete-user-product
+Content-Type: application/json
+Cookie: __clerk_db_jwt=dvb_2rF7jNnyhvVYKFInQz5zszgHoyi;
+
+
+{
+    "userProductId": 17
+}
+
+# To get auth token:
+# 1. Log into your app in browser
+# 2. Open dev tools > Network tab
+# 3. Find any request to your API
+# 4. Copy the "Authorization" header value
+# 5. Set it as a variable in your HTTP client environment
