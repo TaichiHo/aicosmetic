@@ -3,6 +3,7 @@ export interface Product {
   name: string;
   brand?: string;
   category_id: number;
+  category_name: string;
   description?: string;
   image_url?: string;
   barcode?: string;

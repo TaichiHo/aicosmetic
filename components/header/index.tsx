@@ -11,6 +11,7 @@ export default function () {
   const navigations: Nav[] = [
     { name: "collection", title: "My Collection", url: "/collection", target: "_self" },
     { name: "discover", title: "Discover", url: "/discover", target: "_self" },
+    { name: "routines", title: "Routines", url: "/routines", target: "_self" },
   ];
 
   return (

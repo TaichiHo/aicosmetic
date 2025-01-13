@@ -94,48 +94,48 @@ export default function () {
     try {
       setLoading(true);
 
-      // First, upload the image to S3 or your storage service
-      const uploadFormData = new FormData();
-      uploadFormData.append('image', imageFile);
+      // Send the image directly to identify-product endpoint
+      const formData = new FormData();
+      formData.append('image', imageFile);
 
-      const uploadResp = await fetch("/api/upload-image", {
+      const response = await fetch("/api/identify-product", {
         method: "POST",
-        body: uploadFormData,
+        body: formData,
       });
 
-      const uploadData = await uploadResp.json();
+      const { data, error } = await response.json();
 
-      if (!uploadData.success) {
-        throw new Error(uploadData.message || "Failed to upload image");
+      if (error) {
+        throw new Error(error);
       }
 
-      // Then, send the image URL to Gemini for analysis
-      const identifyResp = await fetch("/api/identify-product", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          imageUrl: uploadData.imageUrl,
-          userId: user.id,
-        }),
-      });
-
-      const { success, message, data } = await identifyResp.json();
-
-      if (!success) {
-        throw new Error(message || "Failed to identify product");
+      // Check if data is an array of identified products
+      if (!Array.isArray(data) || data.length === 0) {
+        throw new Error("No products identified in the image");
       }
+
+      // Log identified products for debugging
+      console.log("Identified products:", data);
+
+      // Group products by confidence level
+      const highConfidence = data.filter(p => p.confidence === 'high').length;
+      const mediumConfidence = data.filter(p => p.confidence === 'medium').length;
 
       // Clear the image after successful processing
       setImageFile(null);
       setImagePreview(null);
-      toast.success("Product identified successfully");
 
-      // Redirect to product details or add to collection page
-      if (data?.productId) {
-        router.push(`/products/${data.productId}`);
-      }
+      // Show detailed success message
+      const message = [
+        `${data.length} product(s) identified:`,
+        highConfidence > 0 ? `${highConfidence} with high confidence` : null,
+        mediumConfidence > 0 ? `${mediumConfidence} with medium confidence` : null
+      ].filter(Boolean).join(', ');
+
+      toast.success(message);
+
+      // Redirect to collection page
+      router.push('/collection');
     } catch (error: any) {
       console.error("Failed to process image:", error);
       toast.error(error.message || "Failed to process image");

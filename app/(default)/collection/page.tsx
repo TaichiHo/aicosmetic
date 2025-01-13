@@ -11,6 +11,5 @@ export default async function CollectionPage() {
   }
 
   const products = await getUserProducts(userId);
-  console.log("products", products);
   return <CollectionView initialProducts={products} />;
 } 

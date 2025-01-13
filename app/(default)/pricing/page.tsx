@@ -109,7 +109,6 @@ export default function () {
       const result = await stripe.redirectToCheckout({
         sessionId: session_id,
       });
-      console.log("result", result);
 
       if (result.error) {
         setLoading(false);
@@ -120,7 +119,6 @@ export default function () {
     } catch (e) {
       setLoading(false);
 
-      console.log("checkout failed: ", e);
 
       toast.error("checkout failed");
     }

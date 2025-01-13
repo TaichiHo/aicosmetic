@@ -62,16 +62,16 @@ export default function ProductDetail({ product, userProducts }: ProductDetailPr
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Product Image */}
         <div className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
-          {userProducts.length > 0 && userProducts[0].user_image_url ? (
+          {product.image_url ? (
             <Image
-              src={userProducts[0].user_image_url}
+              src={product.image_url}
               alt={product.name}
               fill
               className="object-cover"
             />
-          ) : product.image_url ? (
+          ) : userProducts.length > 0 && userProducts[0].user_image_url ? (
             <Image
-              src={product.image_url}
+              src={userProducts[0].user_image_url}
               alt={product.name}
               fill
               className="object-cover"
@@ -81,13 +81,13 @@ export default function ProductDetail({ product, userProducts }: ProductDetailPr
               <span className="text-gray-400">No image available</span>
             </div>
           )}
-          {/* Show official product image as thumbnail if both images exist */}
+          {/* Show user-uploaded image as thumbnail if both images exist */}
           {userProducts.length > 0 && userProducts[0].user_image_url && product.image_url && (
             <div className="absolute bottom-2 right-2">
               <div className="bg-white rounded-full p-1 shadow-md">
                 <Image
-                  src={product.image_url}
-                  alt="Official product image"
+                  src={userProducts[0].user_image_url}
+                  alt="User uploaded image"
                   width={40}
                   height={40}
                   className="rounded-full"

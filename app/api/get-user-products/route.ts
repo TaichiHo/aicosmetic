@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getUserProducts } from "@/models/userProduct";
+import { auth } from "@clerk/nextjs/server";
 
-export async function POST(req: Request) {
+export async function GET(req: Request) {
   try {
-    const { userId } = await req.json();
+    const { userId } = auth();
     console.log("userId", userId);
     if (!userId) {
       return NextResponse.json(
@@ -13,7 +14,6 @@ export async function POST(req: Request) {
     }
 
     const products = await getUserProducts(userId);
-    console.log("products", userId, products);
     
     return NextResponse.json({
       data: products,

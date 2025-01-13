@@ -1,34 +1,61 @@
 import { getDb } from "./db";
 import { Product, ProductWithCategory } from "@/types/product";
 
-export async function createProduct(product: Omit<Product, 'id' | 'created_at' | 'uuid'>): Promise<Product> {
+export async function createProduct({
+  name,
+  brand,
+  category_id,
+  description,
+  image_url,
+  barcode,
+  size_value,
+  size_unit,
+  standard_size,
+  retail_price,
+  currency
+}: {
+  name: string;
+  brand?: string;
+  category_id: number;
+  description?: string;
+  image_url?: string;
+  barcode?: string;
+  size_value?: number;
+  size_unit?: string;
+  standard_size?: string;
+  retail_price?: number;
+  currency?: string;
+}): Promise<Product> {
   const db = getDb();
-  
-  // Handle empty numeric values
-  const size_value = product.size_value && !isNaN(product.size_value) ? product.size_value : null;
-  const retail_price = product.retail_price && !isNaN(product.retail_price) ? product.retail_price : null;
-
   const result = await db.query(
     `INSERT INTO products (
-      name, brand, category_id, description, image_url, barcode,
-      size_value, size_unit, standard_size, retail_price, currency,
-      created_at, uuid
-    ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-      CURRENT_TIMESTAMP, gen_random_uuid()
-    ) RETURNING *`,
-    [
-      product.name,
-      product.brand,
-      product.category_id,
-      product.description,
-      product.image_url,
-      product.barcode,
+      name,
+      brand,
+      category_id,
+      description,
+      image_url,
+      barcode,
       size_value,
-      product.size_unit,
-      product.standard_size,
+      size_unit,
+      standard_size,
       retail_price,
-      product.currency
+      currency,
+      created_at,
+      uuid
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, gen_random_uuid())
+    RETURNING *`,
+    [
+      name,
+      brand,
+      category_id,
+      description,
+      image_url,
+      barcode,
+      size_value,
+      size_unit,
+      standard_size,
+      retail_price,
+      currency
     ]
   );
   return result.rows[0];
@@ -120,6 +147,5 @@ export async function getProductByBrandAndName(brand: string, name: string): Pro
      LIMIT 1`,
     [brand, name]
   );
-
   return fuzzyResult.rows[0] || null;
-} 
+}

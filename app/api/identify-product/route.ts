@@ -1,156 +1,314 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { createProduct, getProductByBarcode, getProductByBrandAndName } from "@/models/product";
+import { createProduct, getProductByBrandAndName } from "@/models/product";
 import { createUserProduct, getUserProductByClerkIdAndProductId } from "@/models/userProduct";
-const promptTemplate = `
-Analyze this cosmetic product image and identify only the clearly visible and identifiable cosmetic products. For each product that can be confidently identified, extract the following information in a JSON array format:
-[
-  {
-    "name": "Product name without brand",
-    "brand": "Brand name",
-    "category": "Category (one of: Skincare, Makeup, Haircare, Fragrance, Body Care, Tools)",
-    "description": "Brief product description",
-    "size_value": "Numerical size value (if visible)",
-    "size_unit": "Unit of measurement (ml, g, oz, etc.)",
-    "standard_size": "Size category (Full Size, Travel Size, Mini)",
-    "retail_price": "Retail price if visible (numerical value only)",
-    "currency": "Currency of retail price (USD, EUR, etc.) if price is visible",
-    "barcode": "Barcode number if visible (or null)",
-    "confidence": "Your confidence level in the identification (high, medium, low)",
-    "location": "Brief description of where this product appears in the image (e.g., 'left side', 'center', 'top right')",
-    "official_urls": {
-      "sephora": "Full Sephora product URL if you can identify the exact product (or null)",
-      "ulta": "Full Ulta product URL if you can identify the exact product (or null)", 
-      "official": "Brand's official website product URL if you can identify it (or null)"
+import { createProductImage } from "@/models/productImage";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { v4 as uuidv4 } from 'uuid';
+
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+const GOOGLE_CX = process.env.GOOGLE_CUSTOM_SEARCH_CX;
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || 'us-west-1',
+  credentials: {
+    accessKeyId: process.env.AWS_AK || '',
+    secretAccessKey: process.env.AWS_SK || ''
+  }
+});
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function searchGoogleImages(query: string, site?: string): Promise<any> {
+  const siteRestriction = site ? `site:${site}` : "";
+  const searchQuery = encodeURIComponent(`${query} ${siteRestriction}`);
+  
+  let lastError = null;
+  
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${searchQuery}&searchType=image&num=1&imgType=photo`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Google API responded with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.items?.[0];
+    } catch (error) {
+      lastError = error;
+      console.error(`Attempt ${attempt} failed:`, error);
+      if (attempt < MAX_RETRIES) {
+        await sleep(RETRY_DELAY * attempt); // Exponential backoff
+        continue;
+      }
     }
   }
-]
+  
+  throw lastError;
+}
 
-Important:
-- Only include products where you can identify at least the brand and product name with high or medium confidence
-- Skip any products that are too blurry, partially hidden, or cannot be identified with reasonable certainty
-- For included products, be as accurate as possible with the information you can see
-- If certain fields cannot be determined for an included product, use null for those values
-- List products from most visible/clear to least visible in the image
-- For the official_urls, only include URLs if you are highly confident they match the exact product variant shown
-`;
+async function getProductImage(brand: string, name: string) {
+  const productQuery = `${brand} ${name}`;
 
-export async function POST(request: Request) {
+  let imageResult
+  // If still no result, try general search
+  if (!imageResult) {
+    console.log('Trying general search for:', productQuery);
+    imageResult = await searchGoogleImages(`${productQuery} cosmetic product`).catch((error) => {
+      console.error('General search failed:', error);
+      return null;
+    });
+  }
+  return imageResult;
+}
+
+async function uploadToS3(file: Blob, fileName: string): Promise<string> {
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const key = `user-uploads/${fileName}`;
+
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: process.env.AWS_BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: file.type,
+    })
+  );
+
+  return `https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+}
+
+export async function POST(req: Request) {
   try {
     const { userId } = auth();
     if (!userId) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized" },
+        { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const body = await request.json();
-    const { imageUrl } = body;
-
-    if (!imageUrl) {
+    // Check content type
+    const contentType = req.headers.get('content-type');
+    if (!contentType || !contentType.includes('multipart/form-data')) {
       return NextResponse.json(
-        { success: false, message: "No image URL provided" },
+        { error: "Content type must be multipart/form-data" },
         { status: 400 }
       );
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+    let formData;
+    try {
+      formData = await req.formData();
+    } catch (error) {
+      console.error('Error parsing form data:', error);
+      return NextResponse.json(
+        { error: "Failed to parse form data" },
+        { status: 400 }
+      );
+    }
+
+    const image = formData.get("image");
+    if (!image || !(image instanceof Blob)) {
+      return NextResponse.json(
+        { error: "Image file is required" },
+        { status: 400 }
+      );
+    }
+
+    // Convert image to base64 for Gemini
+    const bytes = await image.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    const base64Image = buffer.toString("base64");
+
+    // Initialize Gemini
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const imageResponse = await fetch(imageUrl);
-    const imageData = await imageResponse.arrayBuffer();
-    const mimeType = imageResponse.headers.get("content-type") || "image/jpeg";
+    const prompt = `Analyze this cosmetic product image and identify all visible cosmetic products. For each product, extract the following information in a JSON array format:
+    [
+      {
+        "name": "Full product name",
+        "brand": "Brand name",
+        "category": "Category (one of: Skincare, Makeup, Haircare, Fragrance, Body Care, Tools)",
+        "description": "Brief product description",
+        "size_value": "Numerical size value (if visible)",
+        "size_unit": "Unit of measurement (ml, g, oz, etc.)",
+        "standard_size": "Size category (Full Size, Travel Size, Mini)",
+        "barcode": "Barcode number if visible (or null)",
+        "confidence": "Your confidence level in the identification (high, medium, low)",
+        "location": "Brief description of where this product appears in the image (e.g., 'left side', 'center', 'top right')"
+      }
+    ]
+
+    Important:
+    - Only include products where you can identify at least the brand and product name with high or medium confidence
+    - Skip any products that are too blurry, partially hidden, or cannot be identified with reasonable certainty
+    - For included products, be as accurate as possible with the information you can see
+    - If certain fields cannot be determined for an included product, use null for those values
+    - List products from most visible/clear to least visible in the image`;
 
     const result = await model.generateContent([
-      promptTemplate,
+      prompt,
       {
         inlineData: {
-          data: Buffer.from(imageData).toString("base64"),
-          mimeType,
-        },
-      },
+          mimeType: image.type || "image/jpeg",
+          data: base64Image
+        }
+      }
     ]);
 
     const response = await result.response;
-    const responseText = response.text();
-    
-    const jsonMatch = (await responseText).match(/\[[\s\S]*\]/);
-    const jsonString = jsonMatch ? jsonMatch[0] : '[]';
-    const productsInfo = JSON.parse(jsonString);
+    const text = response.text();
+    console.log("Gemini response:", text);
+
+    let products;
+    try {
+      // Extract JSON array from markdown code block if present
+      const jsonMatch = text.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
+      const jsonString = jsonMatch ? jsonMatch[1] : text;
+      products = JSON.parse(jsonString);
+
+      if (!Array.isArray(products)) {
+        throw new Error('Response is not an array');
+      }
+    } catch (error) {
+      console.error('Failed to parse Gemini response:', error);
+      console.error('Raw response:', text);
+      return NextResponse.json(
+        { error: "Failed to parse product information" },
+        { status: 500 }
+      );
+    }
 
     const createdProducts = [];
-    for (const productInfo of productsInfo) {
-      let product = null;
+    let s3ImageUrl: string | undefined;
 
-      // First try to find by barcode if available
-      if (productInfo.barcode) {
-        product = await getProductByBarcode(productInfo.barcode);
+    for (const productInfo of products) {
+      // Get category ID based on name
+      const categoryMap: { [key: string]: number } = {
+        'Skincare': 1,
+        'Makeup': 2,
+        'Haircare': 3,
+        'Fragrance': 4,
+        'Body Care': 5,
+        'Tools': 6
+      };
+      const categoryId = categoryMap[productInfo.category];
+      if (!categoryId) {
+        console.error(`Category not found: ${productInfo.category}`);
+        continue;
       }
 
-      // If not found by barcode, try to find by brand and name
-      if (!product && productInfo.brand && productInfo.name) {
-        product = await getProductByBrandAndName(productInfo.brand, productInfo.name);
-      }
+      // Check if product already exists
+      let product = await getProductByBrandAndName(productInfo.brand, productInfo.name);
+      let isNewProduct = false;
 
-      // If product still not found, create new one
       if (!product) {
-        const categoryMap: { [key: string]: number } = {
-          Skincare: 1,
-          Makeup: 2,
-          Haircare: 3,
-          Fragrance: 4,
-          "Body Care": 5,
-          Tools: 6,
-        };
+        isNewProduct = true;
+        // Search for product image only if it's a new product
+        const imageResult = await getProductImage(productInfo.brand, productInfo.name);
+        const imageUrl = imageResult?.link;
+        const thumbnailUrl = imageResult?.image?.thumbnailLink;
+        const sourceUrl = imageResult?.image?.contextLink;
+        const source = sourceUrl?.includes("sephora.com") ? "sephora" :
+                      sourceUrl?.includes("ulta.com") ? "ulta" : "other";
 
-        product = await createProduct({
-          name: productInfo.name,
-          brand: productInfo.brand,
-          category_id: categoryMap[productInfo.category] || 1,
-          description: productInfo.description,
-          barcode: productInfo.barcode,
-          size_value: productInfo.size_value ? parseFloat(productInfo.size_value) : undefined,
-          size_unit: productInfo.size_unit,
-          standard_size: productInfo.standard_size
-        });
+        try {
+          // Create product
+          product = await createProduct({
+            name: productInfo.name,
+            brand: productInfo.brand,
+            category_id: categoryId,
+            description: productInfo.description,
+            size_value: productInfo.size_value ? parseFloat(productInfo.size_value) : undefined,
+            size_unit: productInfo.size_unit,
+            standard_size: productInfo.standard_size,
+            barcode: productInfo.barcode,
+            image_url: imageUrl || undefined
+          });
+
+          // Store thumbnail if available
+          if (product && thumbnailUrl) {
+            await createProductImage(
+              product.id,
+              thumbnailUrl,
+              'thumbnail',
+              sourceUrl,
+              source
+            );
+          }
+        } catch (error) {
+          console.error('Failed to create product:', error);
+          continue;
+        }
       }
 
-      // Check if user already has this product
-      let userProduct = await getUserProductByClerkIdAndProductId(userId, product.id);
-
-      // If user doesn't have this product, create a new user product entry
-      if (!userProduct) {
-        userProduct = await createUserProduct({
-          clerk_id: userId,
-          product_id: product.id,
-          usage_status: "new",
-          usage_percentage: 0,
-          user_image_url: imageUrl
-        });
+      // If we still don't have a product, skip this iteration
+      if (!product) {
+        console.error('Failed to create or find product:', productInfo);
+        continue;
       }
 
-      createdProducts.push({
-        productId: product.id,
-        userProductId: userProduct.id,
-        ...productInfo,
-        user_image_url: imageUrl,
-        alreadyExists: !!userProduct
-      });
+      try {
+        // Check if user already has this product
+        let userProduct = await getUserProductByClerkIdAndProductId(userId, product.id);
+        let isNewUserProduct = false;
+
+        if (!userProduct) {
+          isNewUserProduct = true;
+
+          // Upload image to S3 only if this is a new user product and we haven't uploaded it yet
+          if (!s3ImageUrl) {
+            const fileName = `${uuidv4()}-${image.name || 'image.jpg'}`;
+            s3ImageUrl = await uploadToS3(image, fileName);
+          }
+
+          // Create user product only if it doesn't exist
+          userProduct = await createUserProduct({
+            clerk_id: userId,
+            product_id: product.id,
+            usage_status: 'new',
+            usage_percentage: 0,
+            user_image_url: s3ImageUrl
+          });
+        }
+
+        if (!userProduct) {
+          console.error('Failed to create user product for product:', product.id);
+          continue;
+        }
+
+        createdProducts.push({
+          ...product,
+          user_product: userProduct,
+          confidence: productInfo.confidence,
+          location: productInfo.location,
+          isNewProduct,
+          isNewUserProduct
+        });
+      } catch (error) {
+        console.error('Failed to process user product:', error);
+        continue;
+      }
     }
 
     return NextResponse.json({
-      success: true,
-      data: {
-        products: createdProducts,
-        count: createdProducts.length,
-      },
+      data: createdProducts
     });
+
   } catch (error) {
-    console.error("Product identification failed:", error);
+    console.error("Error in identify-product:", error);
     return NextResponse.json(
-      { success: false, message: "Failed to identify products" },
+      { error: "Failed to process image" },
       { status: 500 }
     );
   }

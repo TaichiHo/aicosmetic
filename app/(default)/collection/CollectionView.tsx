@@ -208,7 +208,6 @@ export default function CollectionView({ initialProducts }: CollectionViewProps)
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          console.log("userproduct", userProduct);
                           handleDelete(userProduct.id);
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
@@ -223,16 +222,16 @@ export default function CollectionView({ initialProducts }: CollectionViewProps)
               {/* Product Card Content (clickable) */}
               <div onClick={() => router.push(`/products/${userProduct.product.id}`)}>
                 <div className="aspect-square relative">
-                  {userProduct.user_image_url ? (
+                  {userProduct.product.image_url ? (
                     <Image
-                      src={userProduct.user_image_url}
+                      src={userProduct.product.image_url}
                       alt={userProduct.product.name}
                       fill
                       className="object-cover"
                     />
-                  ) : userProduct.product.image_url ? (
+                  ) : userProduct.user_image_url ? (
                     <Image
-                      src={userProduct.product.image_url}
+                      src={userProduct.user_image_url}
                       alt={userProduct.product.name}
                       fill
                       className="object-cover"
@@ -246,8 +245,8 @@ export default function CollectionView({ initialProducts }: CollectionViewProps)
                     <div className="absolute bottom-2 right-2">
                       <div className="bg-white rounded-full p-1 shadow-md cursor-pointer hover:bg-gray-100">
                         <Image
-                          src={userProduct.product.image_url}
-                          alt="Official product image"
+                          src={userProduct.user_image_url}
+                          alt="User uploaded image"
                           width={32}
                           height={32}
                           className="rounded-full"
