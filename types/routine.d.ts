@@ -12,17 +12,26 @@ export interface Routine {
   uuid: string;
 }
 
-export interface RoutineProduct {
+export interface RoutineStepProduct {
   id: number;
-  routine_id: number;
+  routine_step_id: number;
   user_product_id: number;
-  step_order: number;
   notes?: string;
   created_at: Date;
   uuid: string;
   user_product?: UserProductWithDetails;
 }
 
-export interface RoutineWithProducts extends Routine {
-  products: RoutineProduct[];
+export interface RoutineStep {
+  id: number;
+  routine_id: number;
+  step_order: number;
+  step_name: string;
+  created_at: Date;
+  uuid: string;
+  products: RoutineStepProduct[];
+}
+
+export interface RoutineWithSteps extends Routine {
+  steps: RoutineStep[];
 } 

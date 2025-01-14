@@ -10,23 +10,23 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { RoutineWithProducts } from '@/types/routine';
+import { RoutineWithSteps } from '@/types/routine';
 import { UserProductWithDetails } from '@/types/userProduct';
 
 interface RoutinesViewProps {
-  initialRoutines: RoutineWithProducts[];
+  initialRoutines: RoutineWithSteps[];
 }
 
 export default function RoutinesView({ initialRoutines }: RoutinesViewProps) {
   const router = useRouter();
-  const [routines, setRoutines] = useState<RoutineWithProducts[]>(initialRoutines);
+  const [routines, setRoutines] = useState<RoutineWithSteps[]>(initialRoutines);
   const [isCreating, setIsCreating] = useState(false);
   const [availableProducts, setAvailableProducts] = useState<UserProductWithDetails[]>([]);
   const [newRoutine, setNewRoutine] = useState({
     name: '',
     time_of_day: '',
     description: '',
-    selectedProducts: [] as { id: number, notes: string }[]
+    selectedProducts: [] as { id: number, notes: string, step_name: string }[]
   });
 
   const loadAvailableProducts = async () => {
@@ -111,7 +111,7 @@ export default function RoutinesView({ initialRoutines }: RoutinesViewProps) {
   const handleAddProduct = () => {
     setNewRoutine({
       ...newRoutine,
-      selectedProducts: [...newRoutine.selectedProducts, { id: 0, notes: '' }]
+      selectedProducts: [...newRoutine.selectedProducts, { id: 0, notes: '', step_name: '' }]
     });
   };
 
@@ -122,9 +122,9 @@ export default function RoutinesView({ initialRoutines }: RoutinesViewProps) {
     });
   };
 
-  const handleProductChange = (index: number, productId: number, notes: string) => {
+  const handleProductChange = (index: number, productId: number, notes: string, step_name: string) => {
     const updatedProducts = [...newRoutine.selectedProducts];
-    updatedProducts[index] = { id: productId, notes };
+    updatedProducts[index] = { id: productId, notes, step_name };
     setNewRoutine({
       ...newRoutine,
       selectedProducts: updatedProducts
@@ -198,24 +198,40 @@ export default function RoutinesView({ initialRoutines }: RoutinesViewProps) {
                         Remove
                       </Button>
                     </div>
-                    <select
-                      value={product.id}
-                      onChange={(e) => handleProductChange(index, Number(e.target.value), product.notes)}
-                      className="w-full border rounded-md p-2"
-                    >
-                      <option value={0}>Select a product...</option>
-                      {availableProducts.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.product.brand} - {p.product.name}
-                        </option>
-                      ))}
-                    </select>
-                    <Textarea
-                      value={product.notes}
-                      onChange={(e) => handleProductChange(index, product.id, e.target.value)}
-                      placeholder="Add notes about using this product..."
-                      className="mt-2"
-                    />
+                    <div className="space-y-2">
+                      <div>
+                        <Label>Step Name</Label>
+                        <Input
+                          value={product.step_name}
+                          onChange={(e) => handleProductChange(index, product.id, product.notes, e.target.value)}
+                          placeholder="e.g., Cleansing, Toning, Moisturizing..."
+                        />
+                      </div>
+                      <div>
+                        <Label>Product</Label>
+                        <select
+                          value={product.id}
+                          onChange={(e) => handleProductChange(index, Number(e.target.value), product.notes, product.step_name)}
+                          className="w-full border rounded-md p-2"
+                        >
+                          <option value={0}>Select a product...</option>
+                          {availableProducts.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.product.brand} - {p.product.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <Label>Notes</Label>
+                        <Textarea
+                          value={product.notes}
+                          onChange={(e) => handleProductChange(index, product.id, e.target.value, product.step_name)}
+                          placeholder="Add notes about using this product..."
+                          className="mt-2"
+                        />
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -247,7 +263,10 @@ export default function RoutinesView({ initialRoutines }: RoutinesViewProps) {
                 <p className="text-sm text-gray-700 mb-4">{routine.description}</p>
               )}
               <p className="text-sm font-medium">
-                {routine.products.length} {routine.products.length === 1 ? 'product' : 'products'}
+                {routine.steps?.length > 0 
+                  ? `${routine.steps.reduce((total, step) => total + (step.products?.length || 0), 0)} products in ${routine.steps.length} steps`
+                  : "No steps added yet"
+                }
               </p>
             </CardContent>
           </Card>

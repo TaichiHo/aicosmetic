@@ -14,7 +14,6 @@ export async function POST(req: Request) {
     return respErr("not login");
   }
   const user_email = user.emailAddresses[0].emailAddress;
-  console.log("user email: ", user_email);
 
   try {
     const { credits, currency, amount, plan } = await req.json();

@@ -32,3 +32,17 @@ Cookie: __clerk_db_jwt=dvb_2rF7jNnyhvVYKFInQz5zszgHoyi;
 # 3. Find any request to your API
 # 4. Copy the "Authorization" header value
 # 5. Set it as a variable in your HTTP client environment
+### test google image search
+GET {{baseUri}}/get-product-image?brand=Shiseido&name=Synchro%20Skin%20Radiant%20Lifting%20Foundation
+Content-Type: application/json
+Cookie: __clerk_db_jwt=dvb_2rF7jNnyhvVYKFInQz5zszgHoyi;
+
+### test another product search
+GET {{baseUri}}/get-product-image?brand=La%20Mer&name=Cr%C3%A8me%20de%20la%20Mer
+Content-Type: application/json
+Cookie: __clerk_db_jwt=dvb_2rF7jNnyhvVYKFInQz5zszgHoyi;
+
+### test SK-II product search
+GET {{baseUri}}/get-product-image?brand=SK-II&name=Facial%20Treatment%20Essence
+Content-Type: application/json
+Cookie: __clerk_db_jwt=dvb_2rF7jNnyhvVYKFInQz5zszgHoyi;
