@@ -7,6 +7,7 @@ import { UserProductWithDetails } from '@/types/userProduct';
 import { toast } from 'sonner';
 import { EllipsisVerticalIcon } from '@heroicons/react/24/outline';
 import { formatDate } from '@/lib/utils';
+import EditProductDialog from '@/components/products/EditProductDialog';
 
 interface CollectionViewProps {
   initialProducts: UserProductWithDetails[];
@@ -23,6 +24,7 @@ export default function CollectionView({ initialProducts }: CollectionViewProps)
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [usageHistories, setUsageHistories] = useState<{ [key: number]: { usage_date: Date, usage_percentage: number }[] }>({});
+  const [editingProduct, setEditingProduct] = useState<UserProductWithDetails | null>(null);
 
   useEffect(() => {
     const fetchUsageHistories = async () => {
@@ -118,6 +120,12 @@ export default function CollectionView({ initialProducts }: CollectionViewProps)
     return result;
   }, [products, sortBy, filterBy, categoryFilter, searchQuery]);
 
+  const handleProductUpdated = (updatedProduct: UserProductWithDetails) => {
+    setProducts(products.map(product => 
+      product.id === updatedProduct.id ? updatedProduct : product
+    ));
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
@@ -208,6 +216,15 @@ export default function CollectionView({ initialProducts }: CollectionViewProps)
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          setEditingProduct(userProduct);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Edit product
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
                           handleDelete(userProduct.id);
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
@@ -292,6 +309,15 @@ export default function CollectionView({ initialProducts }: CollectionViewProps)
             </div>
           ))}
         </div>
+      )}
+
+      {editingProduct && (
+        <EditProductDialog
+          product={editingProduct}
+          open={!!editingProduct}
+          onOpenChange={(open) => !open && setEditingProduct(null)}
+          onProductUpdated={handleProductUpdated}
+        />
       )}
     </div>
   );

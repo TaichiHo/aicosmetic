@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from 'sonner';
 import { RoutineWithSteps } from '@/types/routine';
+import { UserProductWithDetails } from '@/types/userProduct';
 import { Pencil, GripVertical, MoreVertical, Trash2 } from 'lucide-react';
 import {
   DndContext,
@@ -35,6 +36,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import EditProductDialog from '@/components/products/EditProductDialog';
 
 interface RoutineDetailViewProps {
   routine: RoutineWithSteps;
@@ -45,9 +47,16 @@ interface SortableStepProps {
   onRemoveProduct: (stepId: number, productId: number) => void;
   onDeleteStep: (stepId: number) => void;
   onEditStep: (stepId: number, newName: string) => void;
+  onEditProduct: (product: UserProductWithDetails) => void;
 }
 
-function SortableStep({ step, onRemoveProduct, onDeleteStep, onEditStep }: SortableStepProps) {
+function SortableStep({ 
+  step, 
+  onRemoveProduct, 
+  onDeleteStep, 
+  onEditStep,
+  onEditProduct 
+}: SortableStepProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(step.step_name || `Step ${step.step_order}`);
 
@@ -145,7 +154,7 @@ function SortableStep({ step, onRemoveProduct, onDeleteStep, onEditStep }: Sorta
                       </div>
                     )}
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm text-gray-600">
                       {product.user_product?.product.brand} -{' '}
                       {product.user_product?.product.name}
@@ -154,14 +163,28 @@ function SortableStep({ step, onRemoveProduct, onDeleteStep, onEditStep }: Sorta
                       <p className="text-sm text-gray-500 mt-1">{product.notes}</p>
                     )}
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (product.user_product) {
+                          onEditProduct(product.user_product);
+                        }
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => onRemoveProduct(step.id, product.id)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => onRemoveProduct(step.id, product.id)}
-                >
-                  Remove
-                </Button>
               </div>
             ))}
           </div>
@@ -185,6 +208,7 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
   const [productNotes, setProductNotes] = useState('');
   const [stepName, setStepName] = useState('');
   const [selectedStep, setSelectedStep] = useState<'new' | number>('new');
+  const [editingProduct, setEditingProduct] = useState<UserProductWithDetails | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -445,6 +469,28 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
     }
   };
 
+  const handleProductUpdated = (updatedProduct: UserProductWithDetails) => {
+    setRoutine(prevRoutine => ({
+      ...prevRoutine,
+      steps: prevRoutine.steps.map(step => ({
+        ...step,
+        products: step.products.map(product => 
+          product.user_product?.id === updatedProduct.id
+            ? { ...product, user_product: updatedProduct }
+            : product
+        )
+      }))
+    }));
+    
+    toast.success('Product updated successfully');
+    
+    router.refresh();
+  };
+
+  const handleEditProduct = (product: UserProductWithDetails) => {
+    setEditingProduct(product);
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-8">
@@ -597,6 +643,7 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
                 onRemoveProduct={handleRemoveProduct}
                 onDeleteStep={handleDeleteStep}
                 onEditStep={handleEditStep}
+                onEditProduct={handleEditProduct}
               />
             ))}
           </SortableContext>
@@ -608,6 +655,15 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
           <p className="text-gray-500">No products in this routine yet.</p>
           <p className="text-gray-500 mt-2">Click "Add Product" to get started.</p>
         </div>
+      )}
+
+      {editingProduct && (
+        <EditProductDialog
+          product={editingProduct}
+          open={!!editingProduct}
+          onOpenChange={(open) => !open && setEditingProduct(null)}
+          onProductUpdated={handleProductUpdated}
+        />
       )}
     </div>
   );

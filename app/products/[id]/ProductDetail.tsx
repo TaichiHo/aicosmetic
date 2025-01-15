@@ -6,15 +6,19 @@ import { ProductWithCategory } from '@/types/product';
 import { UserProductWithDetails } from '@/types/userProduct';
 import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
+import { EllipsisVerticalIcon } from '@heroicons/react/24/outline';
+import EditProductDialog from '@/components/products/EditProductDialog';
 
 interface ProductDetailProps {
   product: ProductWithCategory;
   userProducts: UserProductWithDetails[];
 }
 
-export default function ProductDetail({ product, userProducts }: ProductDetailProps) {
+export default function ProductDetail({ product, userProducts: initialUserProducts }: ProductDetailProps) {
   const [usagePercentage, setUsagePercentage] = useState<number>(0);
   const [usageHistory, setUsageHistory] = useState<{ usage_date: Date, usage_percentage: number }[]>([]);
+  const [editingProduct, setEditingProduct] = useState<UserProductWithDetails | null>(null);
+  const [userProducts, setUserProducts] = useState<UserProductWithDetails[]>(initialUserProducts);
 
   useEffect(() => {
     const fetchUsageHistory = async (userProductId: number) => {
@@ -55,6 +59,12 @@ export default function ProductDetail({ product, userProducts }: ProductDetailPr
       console.error('Usage recording failed:', error);
       toast.error('Failed to record usage');
     }
+  };
+
+  const handleProductUpdated = (updatedProduct: UserProductWithDetails) => {
+    setUserProducts(userProducts.map(product => 
+      product.id === updatedProduct.id ? updatedProduct : product
+    ));
   };
 
   return (
@@ -162,7 +172,7 @@ export default function ProductDetail({ product, userProducts }: ProductDetailPr
                     key={userProduct.id}
                     className="border rounded-lg p-4 space-y-2"
                   >
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-start">
                       <div>
                         <p className="text-sm text-gray-500">
                           Added {formatDate(userProduct.created_at)}
@@ -174,18 +184,32 @@ export default function ProductDetail({ product, userProducts }: ProductDetailPr
                           Usage: {userProduct.usage_percentage}%
                         </p>
                       </div>
-                      <div className="text-right">
-                        {userProduct.purchase_price && (
-                          <p className="text-sm">
-                            Purchased for {userProduct.purchase_price}{' '}
-                            {userProduct.purchase_currency}
-                          </p>
-                        )}
-                        {userProduct.purchase_location && (
-                          <p className="text-sm text-gray-500">
-                            from {userProduct.purchase_location}
-                          </p>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const dropdown = e.currentTarget.nextElementSibling;
+                              dropdown?.classList.toggle('hidden');
+                            }}
+                            className="p-1 rounded-full hover:bg-gray-100"
+                          >
+                            <EllipsisVerticalIcon className="w-5 h-5 text-gray-600" />
+                          </button>
+                          <div className="hidden absolute right-0 mt-1 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+                            <div className="py-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingProduct(userProduct);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              >
+                                Edit product
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                     <div className="flex gap-4 text-sm text-gray-500">
@@ -245,6 +269,15 @@ export default function ProductDetail({ product, userProducts }: ProductDetailPr
           )}
         </div>
       </div>
+
+      {editingProduct && (
+        <EditProductDialog
+          product={editingProduct}
+          open={!!editingProduct}
+          onOpenChange={(open) => !open && setEditingProduct(null)}
+          onProductUpdated={handleProductUpdated}
+        />
+      )}
     </div>
   );
 } 
