@@ -1,18 +1,17 @@
 import { getDb } from './db';
-import { Routine, RoutineStep, RoutineStepProduct, RoutineWithSteps, TimeOfDay } from '@/types/routine';
+import { Routine, RoutineStep, RoutineStepProduct, RoutineWithSteps } from '@/types/routine';
 
 export async function createRoutine(
   clerk_id: string,
   name: string,
-  time_of_day: TimeOfDay,
   description?: string
 ): Promise<Routine> {
   const db = getDb();
   const result = await db.query(
-    `INSERT INTO routines (clerk_id, name, time_of_day, description)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO routines (clerk_id, name, description)
+     VALUES ($1, $2, $3)
      RETURNING *`,
-    [clerk_id, name, time_of_day, description]
+    [clerk_id, name, description]
   );
   return result.rows[0];
 }
@@ -20,14 +19,14 @@ export async function createRoutine(
 export async function createRoutineStep(
   routine_id: number,
   step_order: number,
-  step_name: string
+  user_step_id: number
 ): Promise<RoutineStep> {
   const db = getDb();
   const result = await db.query(
-    `INSERT INTO routine_steps (routine_id, step_order, step_name)
+    `INSERT INTO routine_steps (routine_id, step_order, user_step_id)
      VALUES ($1, $2, $3)
      RETURNING *`,
-    [routine_id, step_order, step_name]
+    [routine_id, step_order, user_step_id]
   );
   return { ...result.rows[0], products: [] };
 }
@@ -57,7 +56,18 @@ export async function getUserRoutines(clerk_id: string): Promise<RoutineWithStep
            'id', rs.id,
            'routine_id', rs.routine_id,
            'step_order', rs.step_order,
-           'step_name', rs.step_name,
+           'user_step_id', rs.user_step_id,
+           'user_step', (
+             SELECT json_build_object(
+               'id', us.id,
+               'clerk_id', us.clerk_id,
+               'name', us.name,
+               'created_at', us.created_at,
+               'uuid', us.uuid
+             )
+             FROM user_steps us
+             WHERE us.id = rs.user_step_id
+           ),
            'created_at', rs.created_at,
            'uuid', rs.uuid,
            'products', (
@@ -101,7 +111,18 @@ export async function getRoutineById(id: number): Promise<RoutineWithSteps | nul
            'id', rs.id,
            'routine_id', rs.routine_id,
            'step_order', rs.step_order,
-           'step_name', rs.step_name,
+           'user_step_id', rs.user_step_id,
+           'user_step', (
+             SELECT json_build_object(
+               'id', us.id,
+               'clerk_id', us.clerk_id,
+               'name', us.name,
+               'created_at', us.created_at,
+               'uuid', us.uuid
+             )
+             FROM user_steps us
+             WHERE us.id = rs.user_step_id
+           ),
            'created_at', rs.created_at,
            'uuid', rs.uuid,
            'products', (
@@ -177,15 +198,15 @@ export async function getRoutineById(id: number): Promise<RoutineWithSteps | nul
 export async function updateRoutineStep(
   id: number,
   step_order: number,
-  step_name: string
+  user_step_id: number
 ): Promise<RoutineStep | null> {
   const db = getDb();
   const result = await db.query(
     `UPDATE routine_steps
-     SET step_order = $2, step_name = $3
+     SET step_order = $2, user_step_id = $3
      WHERE id = $1
      RETURNING *`,
-    [id, step_order, step_name]
+    [id, step_order, user_step_id]
   );
   return result.rows[0] || null;
 }

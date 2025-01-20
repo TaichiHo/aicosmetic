@@ -1,0 +1,1 @@
+ALTER TABLE routines DROP CONSTRAINT routines_time_of_day_check; 

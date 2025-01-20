@@ -13,38 +13,15 @@ interface CollectionViewProps {
   initialProducts: UserProductWithDetails[];
 }
 
-type SortOption = 'newest' | 'oldest' | 'name' | 'usage';
-type FilterOption = 'all' | 'new' | 'in-use' | 'finished';
+type SortOption = 'newest' | 'oldest' | 'name';
 
 export default function CollectionView({ initialProducts }: CollectionViewProps) {
   const router = useRouter();
   const [products, setProducts] = useState<UserProductWithDetails[]>(initialProducts);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
-  const [filterBy, setFilterBy] = useState<FilterOption>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [usageHistories, setUsageHistories] = useState<{ [key: number]: { usage_date: Date, usage_percentage: number }[] }>({});
   const [editingProduct, setEditingProduct] = useState<UserProductWithDetails | null>(null);
-
-  useEffect(() => {
-    const fetchUsageHistories = async () => {
-      const histories: { [key: number]: { usage_date: Date, usage_percentage: number }[] } = {};
-      for (const product of products) {
-        try {
-          const response = await fetch(`/api/get-usage-history?userProductId=${product.id}`);
-          const data = await response.json();
-          if (data.success) {
-            histories[product.id] = data.usageHistory;
-          }
-        } catch (error) {
-          console.error('Failed to fetch usage history:', error);
-        }
-      }
-      setUsageHistories(histories);
-    };
-
-    fetchUsageHistories();
-  }, [products]);
 
   // Get unique categories from products
   const categories = useMemo(() => {
@@ -81,11 +58,6 @@ export default function CollectionView({ initialProducts }: CollectionViewProps)
   const filteredAndSortedProducts = useMemo(() => {
     let result = [...products];
 
-    // Filter by status
-    if (filterBy !== 'all') {
-      result = result.filter(p => p.usage_status === filterBy);
-    }
-
     // Filter by category
     if (categoryFilter !== 'all') {
       result = result.filter(p => p.product.category_name === categoryFilter);
@@ -110,15 +82,13 @@ export default function CollectionView({ initialProducts }: CollectionViewProps)
           return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
         case 'name':
           return a.product.name.localeCompare(b.product.name);
-        case 'usage':
-          return b.usage_percentage - a.usage_percentage;
         default:
           return 0;
       }
     });
 
     return result;
-  }, [products, sortBy, filterBy, categoryFilter, searchQuery]);
+  }, [products, sortBy, categoryFilter, searchQuery]);
 
   const handleProductUpdated = (updatedProduct: UserProductWithDetails) => {
     setProducts(products.map(product => 
@@ -143,18 +113,6 @@ export default function CollectionView({ initialProducts }: CollectionViewProps)
               <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>
               <option value="name">Name</option>
-              <option value="usage">Usage</option>
-            </select>
-            
-            <select
-              value={filterBy}
-              onChange={(e) => setFilterBy(e.target.value as FilterOption)}
-              className="border rounded-lg px-3 py-2"
-            >
-              <option value="all">All Status</option>
-              <option value="new">New</option>
-              <option value="in-use">In Use</option>
-              <option value="finished">Finished</option>
             </select>
 
             <select
@@ -237,7 +195,7 @@ export default function CollectionView({ initialProducts }: CollectionViewProps)
               </div>
 
               {/* Product Card Content (clickable) */}
-              <div onClick={() => router.push(`/products/${userProduct.product.id}`)}>
+              <div onClick={() => router.push(`/user-products/${userProduct.id}`)}>
                 <div className="aspect-square relative">
                   {userProduct.product.image_url ? (
                     <Image
@@ -254,56 +212,21 @@ export default function CollectionView({ initialProducts }: CollectionViewProps)
                       className="object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                    <div className="w-full h-full bg-gray-200 flex items-center justify-center">
                       <span className="text-gray-400">No image</span>
                     </div>
                   )}
-                  {userProduct.user_image_url && userProduct.product.image_url && (
-                    <div className="absolute bottom-2 right-2">
-                      <div className="bg-white rounded-full p-1 shadow-md cursor-pointer hover:bg-gray-100">
-                        <Image
-                          src={userProduct.user_image_url}
-                          alt="User uploaded image"
-                          width={32}
-                          height={32}
-                          className="rounded-full"
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
-                
                 <div className="p-4">
-                  {userProduct.product.brand && (
-                    <p className="text-sm text-gray-500">{userProduct.product.brand}</p>
-                  )}
-                  <h3 className="font-medium text-lg">{userProduct.product.name}</h3>
-                  <p className="text-sm text-gray-500 mb-2">{userProduct.product.category_name}</p>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className={`text-sm px-2 py-1 rounded ${
-                      userProduct.usage_status === 'new' ? 'bg-green-100 text-green-700' :
-                      userProduct.usage_status === 'in-use' ? 'bg-blue-100 text-blue-700' :
-                      'bg-gray-100 text-gray-700'
-                    }`}>
-                      {userProduct.usage_status}
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      {userProduct.usage_percentage}% used
-                    </span>
-                  </div>
-
-                  {/* Usage History */}
-                  <div className="mt-4">
-                    <h3 className="text-sm font-semibold">Usage History</h3>
-                    <ul className="list-disc pl-5">
-                      {usageHistories[userProduct.id]?.map((entry, index) => (
-                        <li key={index} className="text-xs text-gray-600">
-                          {formatDate(entry.usage_date)}: {entry.usage_percentage}%
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <h3 className="font-medium text-gray-900">
+                    {userProduct.product.brand} - {userProduct.product.name}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {userProduct.product.category_name}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Added {formatDate(userProduct.created_at)}
+                  </p>
                 </div>
               </div>
             </div>
@@ -315,7 +238,11 @@ export default function CollectionView({ initialProducts }: CollectionViewProps)
         <EditProductDialog
           product={editingProduct}
           open={!!editingProduct}
-          onOpenChange={(open) => !open && setEditingProduct(null)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingProduct(null);
+            }
+          }}
           onProductUpdated={handleProductUpdated}
         />
       )}

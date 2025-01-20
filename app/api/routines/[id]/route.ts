@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs';
-import { getRoutineById, updateRoutine } from '@/models/routine';
+import { getRoutineById, updateRoutine, deleteRoutine } from '@/models/routine';
 
 export async function PATCH(
   request: Request,
@@ -42,6 +42,36 @@ export async function PATCH(
     console.error('Error updating routine:', error);
     return NextResponse.json(
       { error: 'Failed to update routine' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { userId } = auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const routine = await getRoutineById(parseInt(params.id));
+    if (!routine) {
+      return NextResponse.json({ error: 'Routine not found' }, { status: 404 });
+    }
+
+    if (routine.clerk_id !== userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await deleteRoutine(parseInt(params.id));
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting routine:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete routine' },
       { status: 500 }
     );
   }

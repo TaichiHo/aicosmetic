@@ -251,13 +251,72 @@ export async function getUserProductsByProductId(
   });
 }
 
-export async function getUserProductById(id: number): Promise<UserProduct | null> {
+export async function getUserProductById(id: number): Promise<UserProductWithDetails | null> {
   const db = getDb();
   const result = await db.query(
-    `SELECT * FROM user_products WHERE id = $1`,
+    `SELECT up.id as user_product_id, 
+            up.clerk_id, up.product_id, up.purchase_date, up.expiry_date,
+            up.opened_date, up.purchase_price, up.purchase_currency,
+            up.purchase_location, up.usage_status, up.usage_percentage,
+            up.notes, up.created_at, up.uuid, up.user_image_url,
+            p.id as product_id,
+            p.name, p.brand, p.category_id, p.description, p.image_url,
+            p.barcode, p.size_value, p.size_unit, p.standard_size,
+            p.retail_price, p.currency, p.created_at as product_created_at,
+            p.uuid as product_uuid,
+            pc.name as category_name
+     FROM user_products up
+     JOIN products p ON up.product_id = p.id
+     JOIN product_categories pc ON p.category_id = pc.id
+     WHERE up.id = $1`,
     [id]
   );
-  return result.rows[0] || null;
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  const row = result.rows[0];
+  const userProduct: UserProduct = {
+    id: row.user_product_id,
+    clerk_id: row.clerk_id,
+    product_id: row.product_id,
+    purchase_date: row.purchase_date,
+    expiry_date: row.expiry_date,
+    opened_date: row.opened_date,
+    purchase_price: row.purchase_price,
+    purchase_currency: row.purchase_currency,
+    purchase_location: row.purchase_location,
+    usage_status: row.usage_status,
+    usage_percentage: row.usage_percentage,
+    notes: row.notes,
+    created_at: row.created_at,
+    uuid: row.uuid,
+    user_image_url: row.user_image_url,
+  };
+
+  const product: ProductWithCategory = {
+    id: row.product_id,
+    name: row.name,
+    brand: row.brand,
+    category_id: row.category_id,
+    category_name: row.category_name,
+    description: row.description,
+    image_url: row.image_url,
+    barcode: row.barcode,
+    size_value: row.size_value,
+    size_unit: row.size_unit,
+    standard_size: row.standard_size,
+    retail_price: row.retail_price,
+    currency: row.currency,
+    created_at: row.product_created_at,
+    uuid: row.product_uuid
+  };
+
+  return {
+    ...userProduct,
+    product
+  };
 }
 
 export async function deleteUserProduct(id: number): Promise<void> {

@@ -1,0 +1,1 @@
+ALTER TABLE routines DROP COLUMN time_of_day; 

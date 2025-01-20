@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,8 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { UserProductWithDetails } from '@/types/userProduct';
-
-type UsageStatus = 'new' | 'in-use' | 'finished';
 
 interface EditProductDialogProps {
   product: UserProductWithDetails;
@@ -30,12 +28,28 @@ export default function EditProductDialog({
     description: product.product.description || '',
     size_value: product.product.size_value,
     size_unit: product.product.size_unit,
-    usage_status: product.usage_status as UsageStatus,
-    usage_percentage: product.usage_percentage,
     notes: product.notes || ''
   });
 
-  const handleSubmit = async () => {
+  // Reset form when dialog opens with new product
+  useEffect(() => {
+    if (open) {
+      setForm({
+        brand: product.product.brand,
+        name: product.product.name,
+        category_id: product.product.category_id,
+        description: product.product.description || '',
+        size_value: product.product.size_value,
+        size_unit: product.product.size_unit,
+        notes: product.notes || ''
+      });
+    }
+  }, [open, product]);
+
+  const handleSubmit = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     try {
       const response = await fetch(`/api/user-products/${product.id}`, {
         method: 'PATCH',
@@ -49,8 +63,6 @@ export default function EditProductDialog({
           description: form.description,
           size_value: form.size_value,
           size_unit: form.size_unit,
-          usage_status: form.usage_status,
-          usage_percentage: form.usage_percentage,
           notes: form.notes
         })
       });
@@ -61,7 +73,6 @@ export default function EditProductDialog({
 
       const updatedProduct = await response.json();
       onProductUpdated(updatedProduct);
-      onOpenChange(false);
       toast.success('Product updated successfully');
     } catch (error) {
       console.error('Error updating product:', error);
@@ -70,8 +81,25 @@ export default function EditProductDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+    <Dialog 
+      open={open} 
+      onOpenChange={(newOpen) => {
+        if (!newOpen) {
+          // Clean up form state before closing
+          setForm({
+            brand: product.product.brand,
+            name: product.product.name,
+            category_id: product.product.category_id,
+            description: product.product.description || '',
+            size_value: product.product.size_value,
+            size_unit: product.product.size_unit,
+            notes: product.notes || ''
+          });
+        }
+        onOpenChange(newOpen);
+      }}
+    >
+      <DialogContent className="max-w-2xl" onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Edit Product</DialogTitle>
         </DialogHeader>
@@ -148,36 +176,6 @@ export default function EditProductDialog({
                   <SelectItem value="oz">oz</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="usage_status">Usage Status</Label>
-              <Select
-                value={form.usage_status}
-                onValueChange={(value: UsageStatus) => setForm({ ...form, usage_status: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new">Not Started</SelectItem>
-                  <SelectItem value="in-use">In Use</SelectItem>
-                  <SelectItem value="finished">Finished</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="usage_percentage">Usage Percentage</Label>
-              <Input
-                id="usage_percentage"
-                type="number"
-                min="0"
-                max="100"
-                value={form.usage_percentage}
-                onChange={(e) => setForm({ ...form, usage_percentage: parseInt(e.target.value) })}
-              />
             </div>
           </div>
 

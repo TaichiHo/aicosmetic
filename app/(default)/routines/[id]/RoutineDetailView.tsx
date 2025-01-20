@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import {
   DropdownMenu,
@@ -16,9 +17,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from 'sonner';
-import { RoutineWithSteps } from '@/types/routine';
+import { RoutineWithSteps, UserStep } from '@/types/routine';
 import { UserProductWithDetails } from '@/types/userProduct';
-import { Pencil, GripVertical, MoreVertical, Trash2 } from 'lucide-react';
+import { Pencil, GripVertical, MoreVertical } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -33,7 +34,7 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy
+  verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import EditProductDialog from '@/components/products/EditProductDialog';
@@ -50,153 +51,165 @@ interface SortableStepProps {
   onEditProduct: (product: UserProductWithDetails) => void;
 }
 
-function SortableStep({ 
-  step, 
-  onRemoveProduct, 
-  onDeleteStep, 
-  onEditStep,
-  onEditProduct 
-}: SortableStepProps) {
+function SortableStep({ step, onRemoveProduct, onDeleteStep, onEditStep, onEditProduct }: SortableStepProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState(step.step_name || `Step ${step.step_order}`);
-
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id: step.id });
+  const [newName, setNewName] = useState(step.user_step.name);
+  const router = useRouter();
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: step.id
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    zIndex: isDragging ? 1 : 0,
+    opacity: isDragging ? 0.5 : 1
   };
 
-  const handleEditSubmit = () => {
-    onEditStep(step.id, editName);
+  const handleEditSubmit = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (newName.trim() && newName !== step.user_step.name) {
+      onEditStep(step.id, newName.trim());
+    }
     setIsEditing(false);
   };
 
-  return (
-    <div ref={setNodeRef} style={style} {...attributes}>
-      <Card className={isDragging ? 'opacity-50' : ''}>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <button {...listeners} className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded">
-              <GripVertical className="h-5 w-5 text-gray-500" />
-            </button>
-            <h3 className="font-medium flex-1">{step.step_name || `Step ${step.step_order}`}</h3>
-            <Dialog open={isEditing} onOpenChange={setIsEditing}>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setIsEditing(true)}>
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Edit Step Name
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-red-600"
-                    onClick={() => onDeleteStep(step.id)}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Step
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+  const handleEditProduct = (e: React.MouseEvent, product: UserProductWithDetails) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onEditProduct(product);
+  };
 
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Edit Step Name</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="step-name">Step Name</Label>
-                    <Input
-                      id="step-name"
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      placeholder="e.g., Cleansing, Toning, Moisturizing..."
-                    />
-                  </div>
-                  <Button 
-                    onClick={handleEditSubmit}
-                    className="w-full"
-                    disabled={!editName.trim()}
-                  >
-                    Save Changes
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+  const handleRemoveProduct = (e: React.MouseEvent, stepId: number, productId: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onRemoveProduct(stepId, productId);
+  };
+
+  return (
+    <Card className="mb-4" style={style}>
+      <CardHeader className="relative">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div {...attributes} {...listeners} ref={setNodeRef} className="cursor-grab">
+              <GripVertical className="h-5 w-5 text-gray-500" />
+            </div>
+            {isEditing ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="w-48"
+                />
+                <Button size="sm" onClick={handleEditSubmit}>Save</Button>
+                <Button size="sm" variant="ghost" onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsEditing(false);
+                }}>Cancel</Button>
+              </div>
+            ) : (
+              <CardTitle>{step.user_step.name}</CardTitle>
+            )}
           </div>
-          <div className="pl-7 space-y-4">
-            {step.products?.map((product) => (
-              <div key={product.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                <div className="flex items-center space-x-4">
-                  <div className="relative w-16 h-16">
-                    {product.user_product?.product.image_url ? (
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsEditing(true);
+              }}>
+                Edit Step Name
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDeleteStep(step.id);
+                }}
+                className="text-red-600"
+              >
+                Delete Step
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {step.products.map((product) => (
+          <div key={product.id} className="mb-4 last:mb-0">
+            {product.user_product && (
+              <div className="flex items-start justify-between">
+                <div 
+                  className="flex items-start gap-4 cursor-pointer hover:opacity-80"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (product.user_product) {
+                      router.push(`/user-products/${product.user_product.id}`);
+                    }
+                  }}
+                >
+                  {product.user_product.user_image_url ? (
+                    <div className="relative h-16 w-16">
+                      <Image
+                        src={product.user_product.user_image_url}
+                        alt={product.user_product.product.name}
+                        fill
+                        className="rounded-lg object-cover"
+                      />
+                    </div>
+                  ) : product.user_product.product.image_url ? (
+                    <div className="relative h-16 w-16">
                       <Image
                         src={product.user_product.product.image_url}
                         alt={product.user_product.product.name}
                         fill
-                        className="object-cover rounded-md"
+                        className="rounded-lg object-cover"
                       />
-                    ) : (
-                      <div className="w-16 h-16 bg-gray-200 rounded-md flex items-center justify-center">
-                        <span className="text-gray-400">No image</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-600">
-                      {product.user_product?.product.brand} -{' '}
-                      {product.user_product?.product.name}
-                    </p>
+                    </div>
+                  ) : null}
+                  <div>
+                    <h4 className="font-medium">
+                      {product.user_product.product.brand} - {product.user_product.product.name}
+                    </h4>
                     {product.notes && (
                       <p className="text-sm text-gray-500 mt-1">{product.notes}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (product.user_product) {
-                          onEditProduct(product.user_product);
-                        }
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => onRemoveProduct(step.id, product.id)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
                 </div>
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={(e) => handleRemoveProduct(e, step.id, product.id)}
+                      className="text-red-600"
+                    >
+                      Remove from Routine
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-            ))}
+            )}
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 
 export default function RoutineDetailView({ routine: initialRoutine }: RoutineDetailViewProps) {
   const router = useRouter();
-  const [routine, setRoutine] = useState(initialRoutine);
+  const [routine, setRoutine] = useState<RoutineWithSteps>(initialRoutine);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -209,6 +222,8 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
   const [stepName, setStepName] = useState('');
   const [selectedStep, setSelectedStep] = useState<'new' | number>('new');
   const [editingProduct, setEditingProduct] = useState<UserProductWithDetails | null>(null);
+  const [userSteps, setUserSteps] = useState<UserStep[]>([]);
+  const [customStepName, setCustomStepName] = useState('');
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -263,18 +278,48 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
     }
   };
 
+  const loadUserSteps = async () => {
+    try {
+      const response = await fetch('/api/user-steps');
+      if (!response.ok) {
+        throw new Error('Failed to load steps');
+      }
+      const steps = await response.json();
+      setUserSteps(steps);
+    } catch (error) {
+      console.error('Error loading steps:', error);
+      toast.error('Failed to load steps');
+    }
+  };
+
+  useEffect(() => {
+    if (isAddingProduct) {
+      loadAvailableProducts();
+      loadUserSteps();
+    }
+  }, [isAddingProduct]);
+
   const handleAddProduct = async () => {
     if (!selectedProduct) {
       toast.error('Please select a product');
       return;
     }
 
-    if (selectedStep === 'new' && !stepName) {
+    if (!stepName) {
+      toast.error('Please select a step');
+      return;
+    }
+
+    if (stepName === 'custom' && !customStepName) {
       toast.error('Please enter a step name');
       return;
     }
 
     try {
+      // Find the maximum step order in the current routine
+      const maxStepOrder = routine.steps.reduce((max, step) => 
+        Math.max(max, step.step_order), 0);
+
       const response = await fetch(`/api/routines/${routine.id}/products`, {
         method: 'POST',
         headers: {
@@ -282,9 +327,8 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
         },
         body: JSON.stringify({
           user_product_id: parseInt(selectedProduct),
-          step_order: selectedStep === 'new' ? routine.steps.length + 1 : undefined,
-          step_name: selectedStep === 'new' ? stepName : undefined,
-          step_id: selectedStep === 'new' ? undefined : selectedStep,
+          step_order: maxStepOrder + 1,
+          step_name: stepName === 'custom' ? customStepName : stepName,
           notes: productNotes
         })
       });
@@ -295,30 +339,31 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
 
       const newProduct = await response.json();
       
-      setRoutine({
-        ...routine,
-        steps: selectedStep === 'new' 
-          ? [...routine.steps, { 
-              id: newProduct.routine_step_id,
-              routine_id: routine.id,
-              step_order: routine.steps.length + 1,
-              step_name: stepName,
-              created_at: new Date(),
-              uuid: '',
-              products: [newProduct]
-            }]
-          : routine.steps.map(step => 
-              step.id === selectedStep 
-                ? { ...step, products: [...step.products, newProduct] }
-                : step
-            )
-      });
+      setRoutine(prevRoutine => ({
+        ...prevRoutine,
+        steps: [...prevRoutine.steps, { 
+          id: newProduct.routine_step_id,
+          routine_id: routine.id,
+          step_order: maxStepOrder + 1,
+          user_step_id: newProduct.user_step_id,
+          user_step: {
+            id: newProduct.user_step_id,
+            clerk_id: routine.clerk_id,
+            name: stepName === 'custom' ? customStepName : stepName,
+            created_at: new Date(),
+            uuid: ''
+          },
+          created_at: new Date(),
+          uuid: '',
+          products: [newProduct]
+        }]
+      }));
 
       setIsAddingProduct(false);
       setSelectedProduct('');
       setStepName('');
+      setCustomStepName('');
       setProductNotes('');
-      setSelectedStep('new');
       toast.success('Product added successfully');
       router.refresh();
     } catch (error) {
@@ -445,7 +490,8 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          step_name: newName
+          user_step_id: routine.steps.find(s => s.id === stepId)?.user_step_id,
+          name: newName
         })
       });
 
@@ -453,14 +499,14 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
         throw new Error('Failed to update step name');
       }
 
-      setRoutine({
-        ...routine,
-        steps: routine.steps.map(step => 
+      setRoutine(prevRoutine => ({
+        ...prevRoutine,
+        steps: prevRoutine.steps.map(step => 
           step.id === stepId 
-            ? { ...step, step_name: newName }
+            ? { ...step, user_step: { ...step.user_step, name: newName } }
             : step
         )
-      });
+      }));
       toast.success('Step name updated successfully');
       router.refresh();
     } catch (error) {
@@ -470,20 +516,20 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
   };
 
   const handleProductUpdated = (updatedProduct: UserProductWithDetails) => {
+    setEditingProduct(null);
+    // Update the product in the routine state
     setRoutine(prevRoutine => ({
       ...prevRoutine,
       steps: prevRoutine.steps.map(step => ({
         ...step,
-        products: step.products.map(product => 
-          product.user_product?.id === updatedProduct.id
-            ? { ...product, user_product: updatedProduct }
-            : product
-        )
+        products: step.products.map(p => {
+          if (p.user_product?.id === updatedProduct.id) {
+            return { ...p, user_product: updatedProduct };
+          }
+          return p;
+        })
       }))
     }));
-    
-    toast.success('Product updated successfully');
-    
     router.refresh();
   };
 
@@ -504,9 +550,6 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
                 </Button>
               </DialogTrigger>
             </div>
-            <p className="text-gray-500 mt-2">
-              {routine.time_of_day.charAt(0).toUpperCase() + routine.time_of_day.slice(1)} Routine
-            </p>
             {routine.description && (
               <p className="text-gray-700 mt-4">{routine.description}</p>
             )}
@@ -560,32 +603,39 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label>Step Selection</Label>
-                <select
-                  value={selectedStep === 'new' ? 'new' : selectedStep}
-                  onChange={(e) => setSelectedStep(e.target.value === 'new' ? 'new' : Number(e.target.value))}
-                  className="w-full border rounded-md p-2 mt-1"
+                <Label>Step</Label>
+                <Select
+                  value={stepName}
+                  onValueChange={setStepName}
                 >
-                  <option value="new">Create New Step</option>
-                  {routine.steps.map((step) => (
-                    <option key={step.id} value={step.id}>
-                      {step.step_name || `Step ${step.step_order}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedStep === 'new' && (
-                <div>
-                  <Label htmlFor="step-name">New Step Name</Label>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a step" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cleansing">Cleansing</SelectItem>
+                    <SelectItem value="toning">Toning</SelectItem>
+                    <SelectItem value="moisturizing">Moisturizing</SelectItem>
+                    {userSteps
+                      .filter(step => 
+                        !['Cleansing', 'Toning', 'Moisturizing'].includes(step.name)
+                      )
+                      .map((step) => (
+                        <SelectItem key={step.id} value={step.name}>
+                          {step.name}
+                        </SelectItem>
+                      ))}
+                    <SelectItem value="custom">Add Custom Step</SelectItem>
+                  </SelectContent>
+                </Select>
+                {stepName === 'custom' && (
                   <Input
-                    id="step-name"
-                    value={stepName}
-                    onChange={(e) => setStepName(e.target.value)}
-                    placeholder="e.g., Cleansing, Toning, Moisturizing..."
+                    className="mt-2"
+                    placeholder="Enter custom step name..."
+                    value={customStepName}
+                    onChange={(e) => setCustomStepName(e.target.value)}
                   />
-                </div>
-              )}
+                )}
+              </div>
 
               <div>
                 <Label htmlFor="product">Select Product</Label>
@@ -617,7 +667,7 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
               <Button 
                 onClick={handleAddProduct} 
                 className="w-full"
-                disabled={!selectedProduct || (selectedStep === 'new' && !stepName)}
+                disabled={!selectedProduct || !stepName || (stepName === 'custom' && !customStepName)}
               >
                 Add to Routine
               </Button>
@@ -661,7 +711,13 @@ export default function RoutineDetailView({ routine: initialRoutine }: RoutineDe
         <EditProductDialog
           product={editingProduct}
           open={!!editingProduct}
-          onOpenChange={(open) => !open && setEditingProduct(null)}
+          onOpenChange={(open) => {
+            console.log("toggling the open state of the diag")
+            if (!open) {
+              console.log("toggling the open state of the diag")
+              setEditingProduct(null);
+            }
+          }}
           onProductUpdated={handleProductUpdated}
         />
       )}

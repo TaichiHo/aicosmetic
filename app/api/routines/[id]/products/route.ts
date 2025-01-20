@@ -8,6 +8,7 @@ import {
   deleteRoutineStep,
   deleteRoutineStepProduct
 } from '@/models/routine';
+import { createUserStep, getUserSteps } from '@/models/userStep';
 
 export async function POST(
   request: Request,
@@ -58,7 +59,22 @@ export async function POST(
           { status: 400 }
         );
       }
-      const step = await createRoutineStep(routine.id, step_order, step_name);
+
+      // Check if a user step with this name already exists
+      const userSteps = await getUserSteps(userId);
+      let userStepId: number;
+      
+      const existingStep = userSteps.find(s => s.name.toLowerCase() === step_name.toLowerCase());
+      if (existingStep) {
+        userStepId = existingStep.id;
+      } else {
+        // Create a new user step
+        const newUserStep = await createUserStep(userId, step_name);
+        userStepId = newUserStep.id;
+      }
+
+      // Create the routine step with the user step ID
+      const step = await createRoutineStep(routine.id, step_order, userStepId);
       routineStepId = step.id;
     }
 
